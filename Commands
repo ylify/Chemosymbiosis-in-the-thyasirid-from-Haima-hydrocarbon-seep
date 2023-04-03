@@ -19,8 +19,8 @@ blobtools plot -i Thyasira_haima_megahit.blobDB.json
 #Phylogenetic trees in thyasirids based on COI, 18S, 28S
 #COI, 18S, and 28S sequences in Thyasira sp. Haima were manully picked from the assembly of megahit
 #Sequences of Other species were downloaded from NCBI
-sh 04_align_with_muscle.sh
-sh 05_trim.sh
+sh 04_align_with_muscle.sh (folder with 28s_20sps.fa, 18s_41sps.fa, coi_31_sps.fa)
+sh 05_trim.sh (folder with )
 #ML tree based on concatenated sequences (COI, 18S, 28S)
 ElConcatenero.py -in 18s.fa_align.fasta_trim.fasta coi.fa_align.fasta_trim.fasta -o coi_18s.fasta -of fasta
 iqtree2 -s Thyasira_3genes_25sps.fasta -p partition.txt -B 1000 -alrt 1000 -m MFP -T 10 &
