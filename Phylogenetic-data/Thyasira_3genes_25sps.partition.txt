@@ -1,0 +1,6 @@
+#nexus
+begin sets;
+	charset 3genes_18s_fasta_align_fasta_trim=1-1567;
+	charset 3genes_28s_fasta_align_fasta_trim=1568-3038;
+	charset 3genes_coi_fasta_align_fasta_trim=3039-3708;
+end;
