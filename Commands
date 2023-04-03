@@ -177,11 +177,3 @@ go_rich <- enricher(gene = gene_up,universe = all_gene,
                     pAdjustMethod = 'BH', 
                     maxGSSize = 500)
 write.table(kegg_rich, 'Thyasira_haima.TPM100.go_rich.significant.txt', sep = '\t', row.names = FALSE, quote = FALSE)
-					
-
-
-
-
-
-
-
