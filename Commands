@@ -1,0 +1,187 @@
+#Reads trimming: 150bp paired-end reads 
+trimmomatic PE -threads 40 -phred33 FDSW220013558-1r_L1_1.fq.gz FDSW220013558-1r_L1_2.fq.gz FDSW220013558-1r_L1_1.paired.fq.gz FDSW220013558-1r_L1_1.unpaired.fq.gz FDSW220013558-1r_L1_2.paired.fq.gz FDSW220013558-1r_L1_2.unpaired.fq.gz ILLUMINACLIP:TruSeq3-PE-2.fa:2:30:10:8:true SLIDINGWINDOW:5:20 LEADING:3 TRAILING:3 MINLEN:75 & #metagenome
+trimmomatic PE -threads 20 -phred33 Thsp-1_1.fq.gz Thsp-1_2.fq.gz Thsp-1_1.paired.fq.gz Thsp-1_1.unpaired.fq.gz Thsp-1_2.paired.fq.gz Thsp-1_2.unpaired.fq.gz ILLUMINACLIP:TruSeq3-PE-2.fa:2:30:10:8:true SLIDINGWINDOW:5:20 LEADING:3 TRAILING:3 MINLEN:75 #metatranscriptome
+
+#metagenome assembly by megahit
+megahit -t 80 --k-list 75,95,115,135 -1 FDSW220013558-1r_L1_1.paired.fq.gz -2 FDSW220013558-1r_L1_2.paired fq.gz -m 0.5 -o megahit_out
+
+#Binning using maxbin2
+run_MaxBin.pl -contig ../megahit_out/final.contigs.fa -out maxbin2_out -reads FDSW220013558-1r_L1_1.paired.fq.gz -reads2 FDSW220013558-1r_L1_2.paired.fq.gz -thread 40 -plotmarker
+
+#Completeness assessment
+checkm lineage_wf -x fasta -t 20 ./fasta/ ./out
+
+#blobtools visualization
+blastn -query ../megahit_out/final.contigs.fa -outfmt '6 qseqid staxids bitscore' -max_target_seqs 10 -max_hsps 1 -evalue 1e-25 -num_threads 60 -out final.contigs.fa.against.blast_nt.m6.xls  -db ~/Database/nt/nt
+blobtools create -i ../megahit_out/final.contigs.fa -t final.contigs.fa.against.blast_nt.m6.xls -c abundance -o Thyasira_haima_megahit #abundance file from maxbin2
+blobtools plot -i Thyasira_haima_megahit.blobDB.json
+
+#Phylogenetic trees in thyasirids based on COI, 18S, 28S
+#COI, 18S, and 28S sequences in Thyasira sp. Haima were manully picked from the assembly of megahit
+#Sequences of Other species were downloaded from NCBI
+sh 04_align_with_muscle.sh
+sh 05_trim.sh
+#ML tree based on concatenated sequences (COI, 18S, 28S)
+ElConcatenero.py -in 18s.fa_align.fasta_trim.fasta coi.fa_align.fasta_trim.fasta -o coi_18s.fasta -of fasta
+iqtree2 -s Thyasira_3genes_25sps.fasta -p partition.txt -B 1000 -alrt 1000 -m MFP -T 10 &
+#18S 
+iqtree2 -s 18s_41sps.fa_align.fasta_trim.fasta -B 1000 -alrt 1000 -m MFP -T AUTO
+#28S 
+iqtree2 -s 28s_20sps.fa_align.fasta_trim.fasta -B 1000 -alrt 1000 -m MFP -T AUTO
+#COI
+iqtree2 -s coi_31sps.fa_align.fasta_trim.fasta -B 1000 -alrt 1000 -m MFP -T AUTO
+
+#HiFi reads extraction from bam file via extracthifi
+extracthifi	Thyasira_haima.bam Thyasira_haima.hifi.bam
+samtools fastq Thyasira_haima.hifi.bam >  Thyasira_haima.hifi.fastq
+
+#hifiaasm assembly
+hifiasm -t 60 -l0 Thyasira)haima.hifi.fastq -o Thyasira_haima.l0
+#symbiont genome via manually selection based on the circular contig and the MAG from megahit_out, named ptg000001c.fasta
+
+#Coverage estimation by minimap2
+minimap2 -ax map-hifi -t 40 -o Thyasira_haima_symbiont.HiFi.sam ../ptg000001c.fasta Thyasira_haima.hifi.fastq
+minimap2 -t 40 -ax sr ../ptg000001c.fasta FDSW220013558-1r_L1_1.paired.fq.gz FDSW220013558-1r_L1_2.paired.fq.gz | samtools sort -@20 -O BAM -o Thyasira_haima_symbiont.NGS_reads.minimap2.sorted.bam -
+
+#CheckM and CheckM2 processing
+checkm lineage_wf -x fasta -t 20 ./fasta/ ./checkm_ut
+checkm2 predict -x fasta --threads 20 -i ./fasta/ -o ./checkm2_out
+
+#Prokka prediction
+prokka --cpus 30 --prefix Thyasira_haima_symbiont ../ptg000001c.fasta
+
+#COG annotation by eggmapper
+emapper.py -i Thyasira_haima_symbiont.faa --tax_scope_mode Bacteria --cpu 80 -o Thyasira_haima_symbiont.faa.eggnog
+
+#Nr database search by blastp and further employed in blast2go (symbiont)
+blastp -db nr_20220915_blast_db -query ../Thyasira_haima_symbiont.faa -num_threads 60 -evalue 1e-5 -word_size 3 -num_alignments 20 -max_hsps 20 -show_gis -outfmt 5 -out Thyasira_haima_symbiont.faa.against.nr.m5
+
+#GTDB-Tk taxonomy assignment
+gtdbtk classify_wf --genome_dir ./bin/ -x fasta --cpus 40 --out_dir gtdbtk_out
+
+#Phylogenomic relations among chemosymbionts in Mollusca
+#The public symbiont genome were downloaded from GeneBank, following the analysis like the newly assembled genome, including prokka, GTDB-Tk, and emapper
+#Step1: copy the anino acid sequences of each symbiont, and format the names of them using python. Name examples: THSP|Contig00001
+#Step2: Orthology looking using orthofinder.
+orthofinder -f proteins -t 40
+#Step3: phylogenomic pipeline designed by Kevin M. Kocot
+sh orthology_script_Kevin.sh
+iqtree2 -T $CORES -B 1000 -s Chemosymbionts_in_Mollusca.supermatrix.fas -Q Chemosymbionts_in_Mollusca.partition_data.txt -m MFP #available at Github
+
+#Classification of reads in the gill metatranscriptome using bowtie2 and minimap2, i.e., symbiont-free reads and symbiont-derived reads
+bowtie2-build ../ptg000001c.fasta ./ptg000001c.bowtie2_index -p 40 -S ptg000001c.bowtie2.align.sam
+bowtie2 -x ./ptg000001c.bowtie2_index -1 Thsp-1_1.paired.fq.gz -2 Thsp-1_2.paired.fq.gz
+minimap2 -x sr -t 60 ../ptg000001c.fasta Thsp-1_2.paired.fq.gz -o Thsp-1_2.symbiont.paf
+minimap2 -x sr -t 60 ../ptg000001c.fasta Thsp-1_1.paired.fq.gz -o Thsp-1_1.symbiont.paf
+#select the reads mapped into symbiont using python, with the output of bowtie_minimap2.list
+seqkit grep -f bowtie_minimap2.list -v -w 0 Thsp-1_2.paired.fq.gz > bowtie2_minimap2.host.R2.fastq 
+seqkit grep -f bowtie_minimap2.list -v -w 0 Thsp-1_1.paired.fq.gz > bowtie2_minimap2.host.R1.fastq
+
+#de novo assembly using Trinity, to obtain the genes in the gill of Thyasira sp.
+Trinity --seqType fq --max_memory 150G --left ../bowtie2_minimap2.host.R1.fastq --right ../bowtie2_minimap2.host.R2.fastq --CPU 15 #output: trinity_out_dir.Trinity.fasta
+#select the longest isoforms from the trinity output, with the output of trinity_out_dir.Trinity.longest_isoform.fasta
+
+#Coding potential prediction
+TransDecoder.LongOrfs -t trinity_out_dir.Trinity.longest_isoform.fasta
+TransDecoder.Predict -t trinity_out_dir.Trinity.longest_isoform.fasta 
+#output: longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.gene.fasta, longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.fasta
+
+#Removal of contaminated genes in the host, i.e., bacterial, viral, and artifical sources
+blastn -query longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.fasta -db ~/Database/nt/nt -outfmt '6 qseqid staxids bitscore' -max_target_seqs 10 -max_hsps 1 -evalue 1e-25 -num_threads 40 -out longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.fasta.against.nt.m6.xls
+diamond blastx -c 1 --db ~/Database/nr_20220901/diamond/nr_20220901_diamond_db.dmnd -p 40 -q longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.gene.fasta --daa longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.gene.fasta.against.diamond_nr.daa
+daa2rma -i longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.gene.fasta.against.diamond_nr.daa -mdb /home/yunlongli/Database/megan-map-Jul2020-2-X.db -o longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.gene.fasta.against.diamond_nr.daa.rma -t $threads
+rma2info -i longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.gene.fasta.against.diamond_nr.daa.rma -r2c Taxonomy -l true -p true -n true -v --majorRanksOnly > longest_orfs.cds.best_candidates.gff3.revised_starts.longest.pep.gene.fasta.against.diamond_nr.daa.rma.taxonomy.txt
+#select the contaminated genes using python, with the output of Thyasira_sp_Haima.trinity_out_dir.Trinity.longest_isoform.decontaminated.fasta (The final version of genes in the gill)
+
+#Nr database search by diamond blastp and further employed in blast2go (host)
+diamond blastp --db ~/Database/nr_20220901/diamond/nr_20220901_diamond_db.dmnd -q ../Thyasira_sp_Haima.trinity_out_dir.Trinity.longest_isoform.decontaminated.pep.fasta -f 5 -p 80 --very-sensitive -o Thyasira_sp_Haima.trinity_out_dir.Trinity.longest_isoform.decontaminated.pep.fasta.against.nr.diamond.m5 --max-hsps 20 --evalue 1e-5
+
+#Quantification of genes in symbiont and host
+align_and_estimate_abundance.pl --thread_count 40 --transcripts ../trinity_out_dir.Trinity.longest_isoform.decontaminated.fasta --seqType fq --left ../../../bowtie2_minimap2.host.R1.fastq.gz --right ../../../bowtie2_minimap2.host.R2.fastq.gz --est_method RSEM --aln_method bowtie --prep_reference --output_dir rsem_outdir #host
+STAR --runThreadN 20 --runMode genomeGenerate --genomeDir ./ptg000001c_index --genomeFastaFiles ../Thyasira_haima_symbiont/Thyasira_haima_symbiont.fna --sjdbGTFfile ../Thyasira_haima_symbiont/Thyasira_haima_symbiont.gff --sjdbOverhang 100 --genomeSAindexNbases 9 --sjdbGTFfeatureExon CDS #symbiont  indexing
+STAR --runThreadN 40 --genomeDir ./ptg000001c_index/ --readFilesIn Thsp-1_1.paired.fq.gz Thsp-1_2.paired.fq.gz --limitBAMsortRAM 1165478133 --outSAMtype BAM SortedByCoordinate --outFileNamePrefix ptg000001c. --readFilesCommand zcat #symbiont quantified using STAR
+
+#Functional enrichment by Clusterprofiler
+#Rscript in symbiont
+library(DESeq2)
+library(edgeR)
+library(ggpubr)
+library(ggthemes)
+library(gmodels)
+library(preprocessCore)
+library(clusterProfiler)
+
+kegg_file <- 'Thyasira_haima_symbiont.faa.KEGG.clusterprofiler.txt'
+go_file <- 'Thyasira_haima_symbiont.faa.against.nr.m5.go.clusterprofiler.txt'
+
+#Functional Enrichment
+#Rscript in the symbiont
+kegg_anno <- read.delim(kegg_file,header=TRUE,sep='\t')
+
+gene_up <- read.table('TPM300.list',sep='\t',row.names = NULL, stringsAsFactors = FALSE)[,1]
+all_gene <- read.delim('../ptg000001c_RNA_prokka.matrix.txt',sep='\t',row.names = NULL, stringsAsFactors = FALSE)[,1]
+
+kegg_rich <- enricher(gene = gene_up,universe = all_gene,
+                      TERM2GENE = kegg_anno[c(2, 1)], 
+                      TERM2NAME = kegg_anno[c(2, 3)], 
+                      pvalueCutoff = 0.05, 
+                      pAdjustMethod = 'BH', 
+                      maxGSSize = 500)
+
+write.table(kegg_rich, 'ptg000001c.TPM300.kegg_rich.significant.txt', sep = '\t', row.names = FALSE, quote = FALSE)
+
+go_anno <- read.delim(go_file,header=FALSE,sep='\t')
+
+go_rich <- enricher(gene = gene_up,universe = all_gene,
+                    TERM2GENE = go_anno[c(2, 1)], 
+                    TERM2NAME = go_anno[c(2, 3)], 
+                    pvalueCutoff = 0.05, 
+                    pAdjustMethod = 'BH', 
+                    maxGSSize = 500)
+
+write.table(kegg_rich, 'ptg000001c.TPM300.go_rich.significant.txt', sep = '\t', row.names = FALSE, quote = FALSE)
+
+#Rscript in the gill of its host
+library(DESeq2)
+library(edgeR)
+library(ggpubr)
+library(ggthemes)
+library(gmodels)
+library(preprocessCore)
+library(clusterProfiler)
+
+kegg_file <- 'trinity_out_dir.Trinity.longest_isoform.decontaminated.fasta.RSEM.transcripts.KEGG.clusterprofiler.no_human_disease.txt'
+go_file <- 'trinity_out_dir.Trinity.longest_isoform.decontaminated.pep.fasta.against.nr.diamond.m5.go.clusterprofiler.txt'
+
+#Functional Enrichment
+kegg_anno <- read.delim(kegg_file,header=TRUE,sep='\t')
+
+gene_up <- read.table('TPM100.list',sep='\t',row.names = NULL, stringsAsFactors = FALSE)[,1]
+all_gene <- read.delim('../trinity_out_dir.Trinity.longest_isoform.decontaminated.fasta.rsem.nr.KEGG.txt',sep='\t',row.names = NULL, stringsAsFactors = FALSE)[,1]
+
+kegg_rich <- enricher(gene = gene_up,universe = all_gene,
+                      TERM2GENE = kegg_anno[c(2, 1)], 
+                      TERM2NAME = kegg_anno[c(2, 3)], 
+                      pvalueCutoff = 0.05, 
+                      pAdjustMethod = 'BH', 
+                      maxGSSize = 500)
+
+write.table(kegg_rich, 'Thyasira_haima.TPM100.kegg_rich.significant.no_human_disease.txt', sep = '\t', row.names = FALSE, quote = FALSE)
+
+go_anno <- read.delim(go_file,header=FALSE,sep='\t')
+
+go_rich <- enricher(gene = gene_up,universe = all_gene,
+                    TERM2GENE = go_anno[c(2, 1)], 
+                    TERM2NAME = go_anno[c(2, 3)], 
+                    pvalueCutoff = 0.05, 
+                    pAdjustMethod = 'BH', 
+                    maxGSSize = 500)
+write.table(kegg_rich, 'Thyasira_haima.TPM100.go_rich.significant.txt', sep = '\t', row.names = FALSE, quote = FALSE)
+					
+
+
+
+
+
+
+
