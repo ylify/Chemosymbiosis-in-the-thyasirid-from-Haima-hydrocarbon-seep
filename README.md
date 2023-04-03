@@ -1,5 +1,5 @@
 # Chemosymbiosis-in-the-thyasirid-from-Haima-hydrocarbon-seep
-This repository consists of the commands and some files during the investigation.
+This repository consists of the commands and some files (mainly for phylogeny) during the investigation.
 
 The raw reads and assemblies were deposited in the NCBI Bioproject database, with the assession numbers PRJNA949122 for the symbiont genome and PRJNA951071 for the metranscriptome of holobiont. 
 In addition, the assemblies and their annotations are available on Figshare (manuscript under review). 
