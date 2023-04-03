@@ -1,5 +1,5 @@
 #align with muscle
-for i in *.fasta;
+for i in *.fa;
         do j=$(echo $i| sed 's/\///')
         echo $j
         Sout=$j'_align.fasta'
