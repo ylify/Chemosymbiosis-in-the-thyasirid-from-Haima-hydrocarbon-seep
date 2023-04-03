@@ -100,6 +100,7 @@ diamond blastp --db ~/Database/nr_20220901/diamond/nr_20220901_diamond_db.dmnd -
 align_and_estimate_abundance.pl --thread_count 40 --transcripts ../trinity_out_dir.Trinity.longest_isoform.decontaminated.fasta --seqType fq --left ../../../bowtie2_minimap2.host.R1.fastq.gz --right ../../../bowtie2_minimap2.host.R2.fastq.gz --est_method RSEM --aln_method bowtie --prep_reference --output_dir rsem_outdir #host
 STAR --runThreadN 20 --runMode genomeGenerate --genomeDir ./ptg000001c_index --genomeFastaFiles ../Thyasira_haima_symbiont/Thyasira_haima_symbiont.fna --sjdbGTFfile ../Thyasira_haima_symbiont/Thyasira_haima_symbiont.gff --sjdbOverhang 100 --genomeSAindexNbases 9 --sjdbGTFfeatureExon CDS #symbiont  indexing
 STAR --runThreadN 40 --genomeDir ./ptg000001c_index/ --readFilesIn Thsp-1_1.paired.fq.gz Thsp-1_2.paired.fq.gz --limitBAMsortRAM 1165478133 --outSAMtype BAM SortedByCoordinate --outFileNamePrefix ptg000001c. --readFilesCommand zcat #symbiont quantified using STAR
+stringtie -e -B -p 20 -G ../Thyasira_haima_symbiont/Thyasira_haima_symbiont.gff -o ./ptg000001c_RNA_prokka.matrix ./ptg000001c.Aligned.sortedByCoord.out.bam
 
 #Functional enrichment by Clusterprofiler
 #Rscript in symbiont
