@@ -23,7 +23,7 @@ sh 04_align_with_muscle.sh (folder with 28s_20sps.fa, 18s_41sps.fa, coi_31_sps.f
 sh 05_trim.sh (folder 'trimmed', named *fa_align.fasta_trim.fasta)
 #ML tree based on concatenated sequences (COI, 18S, 28S)
 ElConcatenero.py -in 18s.fa_align.fasta_trim.fasta coi.fa_align.fasta_trim.fasta -o coi_18s.fasta -of fasta
-iqtree2 -s Thyasira_3genes_25sps.fasta -p partition.txt -B 1000 -alrt 1000 -m MFP -T 10 &
+iqtree2 -s Thyasira_3genes_25sps.fasta -p Thyasira_3genes_25sps.partition.txt -B 1000 -alrt 1000 -m MFP -T 10 &
 #18S 
 iqtree2 -s 18s_41sps.fa_align.fasta_trim.fasta -B 1000 -alrt 1000 -m MFP -T AUTO
 #28S 
